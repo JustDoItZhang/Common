@@ -1,0 +1,80 @@
+using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace System.Threading.Tasks
+{
+    public static class TaskExtension
+    {
+
+        public static Task Then(this Task first, Func<Task> next)
+        {
+            if (first == null) throw new ArgumentNullException("first");
+            if (next == null) throw new ArgumentNullException("next");
+
+            var tcs = new TaskCompletionSource<object>();
+            first.ContinueWith(delegate
+            {
+                if (first.IsFaulted) tcs.TrySetException(first.Exception.InnerException);
+                else if (first.IsCanceled) tcs.TrySetCanceled();
+                else
+                {
+                    try
+                    {
+                        var t = next();
+                        if (t == null) tcs.TrySetCanceled();
+                        else
+                        {
+                            t.ContinueWith(delegate
+                            {
+                                if (t.IsFaulted) tcs.TrySetException(t.Exception.InnerException);
+                                else if (t.IsCanceled) tcs.TrySetCanceled();
+                                else tcs.TrySetResult(null);
+                            }, TaskContinuationOptions.ExecuteSynchronously);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        tcs.TrySetException(ex);
+                    }
+                }
+            }, TaskContinuationOptions.ExecuteSynchronously);
+            return tcs.Task;
+        }
+
+        public static Task Then<T>(this Task first, Func<T, Task> next, T para)
+        {
+            if (first == null) throw new ArgumentNullException("first");
+            if (next == null) throw new ArgumentNullException("next");
+
+            var tcs = new TaskCompletionSource<object>();
+            first.ContinueWith(delegate
+            {
+                if (first.IsFaulted) tcs.TrySetException(first.Exception.InnerException);
+                else if (first.IsCanceled) tcs.TrySetCanceled();
+                else
+                {
+                    try
+                    {
+                        var t = next(para);
+                        if (t == null) tcs.TrySetCanceled();
+                        else
+                        {
+                            t.ContinueWith(delegate
+                            {
+                                if (t.IsFaulted) tcs.TrySetException(t.Exception.InnerException);
+                                else if (t.IsCanceled) tcs.TrySetCanceled();
+                                else tcs.TrySetResult(null);
+                            }, TaskContinuationOptions.ExecuteSynchronously);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        tcs.TrySetException(ex);
+                    }
+                }
+            }, TaskContinuationOptions.ExecuteSynchronously);
+            return tcs.Task;
+        }
+    }
+}
