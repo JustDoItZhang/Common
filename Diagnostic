@@ -1,0 +1,89 @@
+public class HttpClientDiagnosticProcessor : ICustomDiagnosticProcessor
+    {
+        const string TraceIdKey = "X-Gateway-Tid";
+        const string SpanIdKey = "X-Gateway-Sid";
+        const string ParentSpanIdKey = "X-Gateway-Pid";
+
+        private readonly IHttpContextAccessor _accessor;
+        private readonly IOZZOLogger _logger;
+
+        public string ListenerName => "HttpHandlerDiagnosticListener";
+
+        public HttpClientDiagnosticProcessor(IHttpContextAccessor accessor,IOZZOLogger logger)
+        {
+            _accessor = accessor;
+            _logger = logger;
+        }
+
+
+        [DiagnosticName("System.Net.Http.Request")]
+        public void HttpRequest(HttpRequestMessage request)
+        {
+            _logger.Info($"Path:{request?.RequestUri.ToString()}");
+            var currentContext = _accessor.HttpContext;
+            if (currentContext == null) return;
+            _logger.Info($"Trace got");
+            if (currentContext.Request.Headers.TryGetValue(TraceIdKey, out var traceId))
+            {
+                _logger.Info($"TraceId: {traceId}");
+                request.Headers.TryAddWithoutValidation(TraceIdKey, traceId.ToString());
+                if(currentContext.Request.Headers.TryGetValue(SpanIdKey, out var spanId))
+                {
+                    _logger.Info($"SpanId: {spanId}");
+                    request.Headers.TryAddWithoutValidation(ParentSpanIdKey, spanId.ToString());
+                }
+            }
+        }
+
+        [DiagnosticName("System.Net.Http.Response")]
+        public void HttpResponse(HttpResponseMessage response)
+        {
+
+        }
+
+        [DiagnosticName("System.Net.Http.Exception")]
+        public void HttpException(HttpRequestMessage request,
+            Exception exception)
+        {
+            
+        }
+    }
+    
+    
+ 
+ 
+ DiagnosticListener.AllListeners.Subscribe(manager);
+ 
+ 
+ 
+ 
+ public class DiagnosticProcessorManager : IObserver<DiagnosticListener>
+    {
+        private readonly IEnumerable<ICustomDiagnosticProcessor> _processors;
+        public DiagnosticProcessorManager(IEnumerable<ICustomDiagnosticProcessor> processors)
+        {
+            _processors = processors;
+        }
+
+
+        public void OnCompleted()
+        {
+            
+        }
+
+        public void OnError(Exception error)
+        {
+            
+        }
+
+        public void OnNext(DiagnosticListener value)
+        {
+            foreach(var processor in _processors)
+            {
+                if(value.Name.Equals(processor.ListenerName, StringComparison.CurrentCultureIgnoreCase))
+                {
+                    value.SubscribeWithAdapter(processor);
+                }
+            }
+        }
+    }
