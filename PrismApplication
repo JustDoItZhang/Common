@@ -1,0 +1,92 @@
+public partial class App : PrismApplication
+    {
+        const string SAVE_PATH = @"D:\Test\Upload";
+
+        protected override Window CreateShell()
+        {
+            return Container.Resolve<MainWindow>();
+        }
+
+        protected override void RegisterTypes(IContainerRegistry containerRegistry)
+        {
+            containerRegistry.Register<TestView>();
+        }
+
+        protected override IModuleCatalog CreateModuleCatalog()
+        {
+            return new DirectoryModuleCatalog { ModulePath = @".\Modules"};
+        }
+
+        protected override IContainerExtension CreateContainerExtension()
+        {
+            var serviceCollection = new ServiceCollection();
+            serviceCollection.AddHttpClient("defaultClient",
+                client => client.BaseAddress = new Uri("http://localhost:5000/api/"));
+            serviceCollection.AddScoped<IAPIHelper, APIHelper>();
+
+            var container = new UnityContainer();
+            container.BuildServiceProvider(serviceCollection);
+
+            return new UnityContainerExtension(container);
+        }
+
+        protected override void InitializeModules()
+        {
+            //更新版本
+            //try
+            //{
+            //    Trace.WriteLine("start get app version");
+            //    var apiHelper = Container.Resolve<IAPIHelper>();
+            //    var app = apiHelper.GetAsync<AppModel>("VersionControl/App", new { appId = AppConstants.AppId }).Result;
+            //    Trace.WriteLine("app" + System.Text.Json.JsonSerializer.Serialize(app));
+            //    foreach (var m in app.Modules)
+            //    {
+            //        File.Move(Path.Combine(SAVE_PATH, m.ModuleFileName),
+            //            Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Modules", m.ModuleDLL),
+            //            true);
+            //    }
+            //}
+            //catch(Exception ex)
+            //{
+            //    Trace.WriteLine(ex.ToString());
+            //}
+
+            base.InitializeModules();
+        }
+
+        protected override void OnInitialized()
+        {
+            base.OnInitialized();
+
+            this.DispatcherUnhandledException += App_DispatcherUnhandledException;
+            TaskScheduler.UnobservedTaskException += TaskScheduler_UnobservedTaskException;
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomain_UnhandledException;
+        }
+
+        private void CurrentDomain_UnhandledException(object sender, UnhandledExceptionEventArgs e)
+        {
+            StringBuilder sb = new StringBuilder();
+            if (e.IsTerminating)
+                sb.Append("程序发生致命错误\n");
+            if (e.ExceptionObject is Exception)
+                sb.Append((e.ExceptionObject as Exception).Message);
+            else
+                sb.Append(e.ExceptionObject);
+
+
+            MessageBox.Show(sb.ToString());
+        }
+
+        private void TaskScheduler_UnobservedTaskException(object sender, UnobservedTaskExceptionEventArgs e)
+        {
+            string msg = string.Format("应用程序出错:{0}", e.Exception.Message);
+            MessageBox.Show(msg);
+        }
+
+        private void App_DispatcherUnhandledException(object sender, System.Windows.Threading.DispatcherUnhandledExceptionEventArgs e)
+        {
+            e.Handled = true;
+            string msg = string.Format("应用程序出错:{0}", e.Exception.Message);
+            MessageBox.Show(msg);
+        }
+    }
