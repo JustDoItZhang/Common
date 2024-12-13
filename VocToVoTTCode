@@ -1,0 +1,132 @@
+using System;
+using System.Text;
+using System.Text.Json;
+using System.Xml.Linq;
+using SkiaSharp;
+
+string vocPath = @"D:\BaiduNetdiskDownload\VOC2020\Annotations";
+DirectoryInfo di = new DirectoryInfo(vocPath);
+
+string version = "2.2.0";
+Dictionary<string, object> root = new Dictionary<string, object>()
+    {
+        {"name", "fire_detection"},
+    { "securityToken", "test_token"},
+    { "videoSettings", new
+    {
+        frameExtractionRate = 15
+    }},
+    { "tags", new List<object>
+    {
+        new
+        {
+            name = "fire",
+            color = "#5db300"
+        }
+    }},
+    { "id", "ocFIm9TNDk"},
+    { "activeLearningSettings",  new
+    {
+        autoDetect = false,
+        predictTag = true,
+        modelPathType = "coco"
+    }},
+    { "version" , version}
+    };
+
+int id = 0;
+string lastVisitedAssetId = string.Empty;
+Dictionary<string, object> vottObjects = new Dictionary<string, object>();
+foreach (FileInfo fi in di.GetFiles("*.xml"))
+{
+    string key = Guid.NewGuid().ToString().Replace("-", "");
+
+    if (string.IsNullOrWhiteSpace(lastVisitedAssetId)) lastVisitedAssetId = key;
+
+    XElement ele = XElement.Load(fi.FullName);
+    var size = ele.Descendants("size").Select(x => new { width = x.Descendants("width").First().Value, height = x.Descendants("height").First().Value }).First();
+    var fileName = ele.Descendants("filename").First().Value;
+
+    var asset = new Dictionary<string, object>()
+    {
+        { "format", "jpg"},
+        { "name", fileName },
+        {"id", key },
+        {"path", $"file:D:/BaiduNetdiskDownload/VOC2020/JPEGImages/{fileName}" },
+        {"state", 2 },
+        { "type", 1},
+        {"size", new
+        {
+            width = size.width,
+            height = size.height
+        }
+        }
+    };
+
+
+
+    List<Dictionary<string, object>> regions = new List<Dictionary<string, object>>();
+    foreach (var obj in ele.Descendants("object"))
+    {
+        var box = obj.Descendants("bndbox").First();
+        double left = Convert.ToDouble(box.Descendants("xmin").First().Value);
+        double top = Convert.ToDouble(box.Descendants("ymin").First().Value);
+        double right = Convert.ToDouble(box.Descendants("xmax").First().Value);
+        double bottom = Convert.ToDouble(box.Descendants("ymax").First().Value);
+
+
+        var region = new Dictionary<string, object>
+        {
+            { "id", (id++).ToString()},
+            { "type", "RECTANGL" },
+            { "tags", new List<string>{"fire" } },
+            {"boundingBox", new
+                {
+                    height = bottom - top,
+                    width = right - left,
+                    left = left,
+                    top = top,
+                }
+            },
+            {"points", new List<object>
+                {
+                    new
+                    {
+                        x = left,
+                        y = top,
+                    },
+                    new
+                    {
+                        x = right,
+                        y = top
+                    },
+                    new
+                    {
+                        x = left,
+                        y = bottom
+                    },
+                    new
+                    {
+                        x = right,
+                        y = bottom
+                    }
+                }
+            }
+        };
+
+        regions.Add(region);
+    }
+
+    vottObjects.Add(key, new
+    {
+        asset = asset,
+        regions = regions,
+        version = version
+    });
+}
+
+root.Add("assets", vottObjects);
+
+string text = JsonSerializer.Serialize(root);
+using var sw = new StreamWriter("target.json", false, Encoding.UTF8);
+sw.Write(text);
